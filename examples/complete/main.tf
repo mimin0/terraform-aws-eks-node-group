@@ -18,15 +18,9 @@ module "label" {
 locals {
   # The usage of the specific kubernetes.io/cluster/* resource tags below are required
   # for EKS and Kubernetes to discover and manage networking resources
-  # https://www.terraform.io/docs/providers/aws/guides/eks-getting-started.html#base-vpc-networking
-  tags = try(merge(module.label.tags, tomap("kubernetes.io/cluster/${module.label.id}", "shared")), null)
-
-  # Unfortunately, most_recent (https://github.com/cloudposse/terraform-aws-eks-workers/blob/34a43c25624a6efb3ba5d2770a601d7cb3c0d391/main.tf#L141)
-  # variable does not work as expected, if you are not going to use custom ami you should
-  # enforce usage of eks_worker_ami_name_filter variable to set the right kubernetes version for EKS workers,
-  # otherwise will be used the first version of Kubernetes supported by AWS (v1.11) for EKS workers but
-  # EKS control plane will use the version specified by kubernetes_version variable.
-  eks_worker_ami_name_filter = "amazon-eks-node-${var.kubernetes_version}*"
+  # https://aws.amazon.com/premiumsupport/knowledge-center/eks-vpc-subnet-discovery/
+  # https://github.com/kubernetes-sigs/aws-load-balancer-controller/blob/main/docs/deploy/subnet_discovery.md
+  tags = { "kubernetes.io/cluster/${module.label.id}" = "shared" }
 
   allow_all_ingress_rule = {
     key              = "allow_all_ingress"
@@ -55,7 +49,7 @@ locals {
 
 module "vpc" {
   source  = "cloudposse/vpc/aws"
-  version = "0.25.0"
+  version = "1.1.0"
 
   cidr_block = var.vpc_cidr_block
   tags       = local.tags
@@ -65,13 +59,14 @@ module "vpc" {
 
 module "subnets" {
   source  = "cloudposse/dynamic-subnets/aws"
-  version = "0.39.4"
+  version = "2.0.2"
 
   availability_zones   = var.availability_zones
   vpc_id               = module.vpc.vpc_id
-  igw_id               = module.vpc.igw_id
-  cidr_block           = module.vpc.vpc_cidr_block
-  nat_gateway_enabled  = false
+  igw_id               = [module.vpc.igw_id]
+  ipv4_cidr_block      = [module.vpc.vpc_cidr_block]
+  max_nats             = 1
+  nat_gateway_enabled  = true
   nat_instance_enabled = false
   tags                 = local.tags
 
@@ -80,7 +75,7 @@ module "subnets" {
 
 module "ssh_source_access" {
   source  = "cloudposse/security-group/aws"
-  version = "0.4.0"
+  version = "0.4.3"
 
   attributes                 = ["ssh", "source"]
   security_group_description = "Test source security group ssh access only"
@@ -97,7 +92,7 @@ module "ssh_source_access" {
 
 module "https_sg" {
   source  = "cloudposse/security-group/aws"
-  version = "0.4.0"
+  version = "0.4.3"
 
   attributes                 = ["http"]
   security_group_description = "Allow http access"
@@ -111,11 +106,9 @@ module "https_sg" {
   context = module.label.context
 }
 
-
 module "eks_cluster" {
-  source  = "cloudposse/eks-cluster/aws"
-  version = "0.43.2"
-
+  source                       = "cloudposse/eks-cluster/aws"
+  version                      = "2.4.0"
   region                       = var.region
   vpc_id                       = module.vpc.vpc_id
   subnet_ids                   = module.subnets.public_subnet_ids
@@ -144,7 +137,7 @@ module "eks_node_group" {
   kubernetes_version = [var.kubernetes_version]
   kubernetes_labels  = merge(var.kubernetes_labels, { attributes = coalesce(join(module.this.delimiter, module.this.attributes), "none") })
   kubernetes_taints  = var.kubernetes_taints
-  # disk_size          = var.disk_size
+
   ec2_ssh_key_name              = var.ec2_ssh_key_name
   ssh_access_security_group_ids = [module.ssh_source_access.id]
   associated_security_group_ids = [module.ssh_source_access.id, module.https_sg.id]
@@ -162,7 +155,7 @@ module "eks_node_group" {
 
   # Ensure ordering of resource creation to eliminate the race conditions when applying the Kubernetes Auth ConfigMap.
   # Do not create Node Group before the EKS cluster is created and the `aws-auth` Kubernetes ConfigMap is applied.
-  depends_on = [module.eks_cluster.kubernetes_config_map_id]
+  depends_on = [module.eks_cluster, module.eks_cluster.kubernetes_config_map_id]
 
   create_before_destroy = true
 

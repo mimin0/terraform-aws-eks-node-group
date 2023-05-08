@@ -1,8 +1,23 @@
-# Migration to v0.25.0
+## Migration Notes for EKS Node Group v2.0
+
+As part of Cloud Posse's general conversion to [production Semantic Versioning](https://semver.org/#spec-item-5)
+for its Terraform modules, various releases of `terraform-aws-eks-node-group`
+have been re-released using production-level versions. When upgrading,
+from a pre-production version (0.x), use the following guide to 
+help you understand what has changed.
+
+| Pre-Production Version | Re-Released as |
+|-----------------------:|---------------:|
+|                 0.20.0 |          1.0.0 |
+|                 0.25.0 |          2.0.0 |
+|                 0.27.1 |          2.1.0 |
+|                 0.27.3 |          2.2.0 |
+|                 0.28.0 |          2.3.0 |
+
 
 ## New Features
 
-With v0.25.0 we have fixed a lot of issues and added several requested features.
+With v2.0.0 we have fixed a lot of issues and added several requested features.
 
 - Full control over block device mappings via `block_device_mappings`
 - Ability to associate additional security groups with a node group via `associated_security_group_ids`
@@ -19,16 +34,17 @@ upgrade.
 
 See the [README](https://github.com/cloudposse/terraform-aws-eks-node-group) for more details.
 
-## Breaking changes in v0.25.0
+## Breaking changes in v2.0.0
 
-Releases v0.11.0 through v0.20.0 of this module attempted to maintain compatibility, so that no code changes were needed to upgrade and node groups would not likely be recreated on upgrade.
-Releases between v0.20.0 and v0.25.0 were never recommended for use because of compatibility issues. With the release of v0.25.0 we are making significant, breaking changes in order to bring
+Releases v0.11.0 through v0.20.0 and v1.0.0 of this module attempted to maintain compatibility, so that no code changes were needed to upgrade and node groups would not likely be recreated on upgrade.
+Releases between v0.20.0 and v0.25.0 were never recommended for use because of compatibility issues. With the release of v2.0.0 we are making significant, breaking changes in order to bring
 this module up to current Cloud Posse standards. Code changes will likely be needed and node groups will likely need to be recreated. We strongly recommend enabling `create_before_destroy`
 if you have not already, as in general it provides a better upgrade path whenever an upgrade or change in configuration requires a node group to be replaced.
+Releases v0.26.0 through 0.28.1 are generally compatible with v2.0.0. See the table at the top of this page for the mapping of these version to 2.x versions.
 
 ### Terraform Version
 
-Terraform version 1.0 is out. Before that, there was Terraform version 0.15, 0.14, 0.13 and so on. The v0.25.0 release of this module drops support for Terraform 0.13. That version is old
+Terraform version 1.0 is out. Before that, there was Terraform version 0.15, 0.14, 0.13 and so on. The v2.0.0 release of this module drops support for Terraform 0.13. That version is old
 and has lots of known issues. There are hardly any breaking changes between Terraform 0.13 and 1.0, so please upgrade to the latest Terraform version before raising any issues about this
 module.
 
@@ -83,16 +99,18 @@ module.
 - The following optional values used to be `string` type and are now `list(string)` type. An empty list is allowed. If the list has a value in it, that value will be used, even if empty,
   which may not be allowed by Terraform. The list may not have more than one value.
 
-    - `ami_image_id`
-    - `ami_release_version`
-    - `kubernetes_version`
-    - `launch_template_id`
-    - `launch_template_version`
-    - `ec2_ssh_key` renamed `ec2_ssh_key_name`
-    - `before_cluster_joining_userdata`
-    - `after_cluster_joining_userdata`
-    - `bootstrap_additional_options`
-    - `userdata_override_base64`
+```
+- `ami_image_id`
+- `ami_release_version`
+- `kubernetes_version`
+- `launch_template_id`
+- `launch_template_version`
+- `ec2_ssh_key` renamed `ec2_ssh_key_name`
+- `before_cluster_joining_userdata`
+- `after_cluster_joining_userdata`
+- `bootstrap_additional_options`
+- `userdata_override_base64`
+```
 
 - `kubelet_additional_options` was changed from `string` to `list(string)` but can contain multiple values, allowing you to specify options individually rather than requiring that you join
   them into one string (which you may still do if you prefer to).
@@ -104,15 +122,14 @@ In most cases, the changes you need to make are pretty easy.
 #### Review behavior changes and new features
 
 - Do you want node group instance EBS volumes deleted on termination? You can disable that now.
-- Do you want Instance Metadata Service v1 available? This module now disables it by default, and EKS and Kubernetes all handle that fine, but you might have scripts that `curl` the instance
-  metadata endpoint that need it.
-- Did you have the "create before destroy" behavior disabled? The migration to v0.25.0 of this module is going to cause your node group to be destroyed and recreated anyway, so take the
-  opportunity to enable it. It will save you and outage some day.
-- Were you supplying your own launch template, and stuck having to put an instance type in it because the earlier versions of this module would not let you do otherwise? Well, now you can
-  leave the instance type out of your launch template and supply a set of types via the node group to enable a spot fleet.
+- Do you want Instance Metadata Service v1 available? This module now disables it by default, and EKS and Kubernetes all handle that fine, but you might have scripts that `curl` the instance metadata endpoint that need it.
+- Did you have the "create before destroy" behavior disabled? The migration to v2.0.0 of this module is going to cause your node group to be destroyed 
+  and recreated anyway, so take the opportunity to enable it. It will save you an outage some day.
+- Were you supplying your own launch template, and stuck having to put an instance type in it because the earlier versions of this module would not let you do
+  otherwise? Well, now you can leave the instance type out of your launch template and supply a set of types via the node group to enable a spot fleet.
 - Were you unhappy with the way the IAM Role for the nodes was configured? Now you can configure a role exactly the way you like and pass it in.
-- Were you frustrated that you had to copy a bunch of rules from one security group to the node group's security group? Now you can just associate the other security groups directly with the
-  node group.
+- Were you frustrated that you had to copy a bunch of rules from one security group to the node group's security group? Now you can just associate the other
+  security groups directly with the node group.
 - Were you experiencing timeouts creating or updating large node groups? Now you can set Terraform timeouts explicitly, and also control the pace of upgrades with `update_config`.
 
 #### Rename variables
@@ -197,3 +214,4 @@ module "node_group" {
   ...
 }
 ```
+
